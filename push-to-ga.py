@@ -6,10 +6,10 @@ import http
 import logging
 import typing as tp
 
-import google_measurement_protocol
 import httpx
 import pydantic
 
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -18,7 +18,8 @@ def parse_args() -> argparse.Namespace:
         description="Push today's PLN-<currency> exchange rate to Google Analytics"
     )
     parser.add_argument("currency", help="foreign (non-PLN) currency code (e.g. USD)")
-    parser.add_argument("--tracking-id", default="G-N68MP7FS00", help="tracking ID")
+    parser.add_argument("api_secret", help="API secret")
+    parser.add_argument("--measurement-id", default="G-N68MP7FS00", help="tracking ID")
     parser.add_argument(
         "--client-id",
         default="72315d68-7130-43f4-b9bb-caead00a2483",
@@ -34,31 +35,34 @@ def main(args: argparse.Namespace) -> None:
         logger.warning(f"no today's exchange rates are available for {args.currency}")
         return
 
+    logger.info(f"sending {len(exchange_rates.rates)} events to Google Analytics")
     for rate in exchange_rates.rates:
-        logger.info(f"got rate: {rate}")
-
-        bid_event = google_measurement_protocol.event(
-            "rates",
-            f"{args.currency.lower()}_bid_rate_updated",
-            label="Bid rate updated",
-            value=rate.bid,
-        )
-        google_measurement_protocol.report(args.tracking_id, args.client_id, bid_event)
-        logger.info(f"sent event: {bid_event}")
-
-        ask_event = google_measurement_protocol.event(
-            "rates",
-            f"{args.currency.lower()}_ask_rate_updated",
-            label="Ask rate updated",
-            value=rate.ask,
-        )
-        google_measurement_protocol.report(args.tracking_id, args.client_id, ask_event)
-        logger.info(f"sent event: {ask_event}")
+        logger.info(f"{rate=}")
+    httpx.post(
+        "https://www.google-analytics.com/debug/mp/collect",
+        params={"api_secret": args.api_secret, "measurement_id": args.measurement_id},
+        json={
+            "client_id": args.client_id,
+            "events": [
+                {
+                    "name": f"{args.currency.lower()}_rate_update",
+                    "params": {
+                        "code": exchange_rates.code,
+                        "date": rate.date.isoformat(),
+                        "bid": rate.bid,
+                        "ask": rate.ask,
+                    },
+                }
+                for rate in exchange_rates.rates
+            ],
+        },
+    )
+    logger.info(f"sent {len(exchange_rates.rates)} events to Google Analytics")
 
 
 class ExchangeRates(pydantic.BaseModel):
     currency: str
-    currency_code: str
+    code: str
     rates: list[ExchangeRate]
 
     @classmethod
@@ -88,7 +92,7 @@ class ExchangeRates(pydantic.BaseModel):
 class ExchangeRate(pydantic.BaseModel):
     bid: float
     ask: float
-    date: datetime.date
+    date: datetime.date = pydantic.Field(alias="effectiveDate")
 
 
 if __name__ == "__main__":

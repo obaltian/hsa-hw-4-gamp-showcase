@@ -10,7 +10,6 @@ license = "MIT"
 [tool.poetry.dependencies]
 python = "^3.11"
 httpx = "0.24.1"
-google-measurement-protocol = "1.1.0"
 pydantic = "2.0.3"
 
 
