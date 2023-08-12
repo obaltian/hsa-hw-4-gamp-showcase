@@ -39,7 +39,7 @@ def main(args: argparse.Namespace) -> None:
     for rate in exchange_rates.rates:
         logger.info(f"{rate=}")
     httpx.post(
-        "https://www.google-analytics.com/debug/mp/collect",
+        "https://www.google-analytics.com/mp/collect",
         params={"api_secret": args.api_secret, "measurement_id": args.measurement_id},
         json={
             "client_id": args.client_id,
